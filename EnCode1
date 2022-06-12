@@ -1,0 +1,84 @@
+#include <sys/stat.h>
+#include <iostream>
+#include <fstream>
+#include <unordered_map>
+#include <vector>
+#include <algorithm>
+#include <stdexcept>
+
+using namespace std;
+
+// Количество битов в регистре
+#define countofbits 16
+
+// возвращает индекс символа
+int indexForSymbol(char c, vector<pair<char, unsigned int>> arr) {
+    for (int i = 0; i < arr.size(); i++) {
+        if (c == arr[i].first) {
+            return i + 2;
+        }
+    }
+    return -1;
+}
+
+// Вывод очередного бита сжатой информации
+void output_bit(unsigned int bit, unsigned int* blen, unsigned char* insertbit, FILE* output_file) {
+    (*insertbit) >>= 1;
+    if (bit) (*insertbit) |= 0x80;
+    (*blen)--;
+    if ((*blen) == 0) {
+        fputc((*insertbit), output_file);
+        (*blen) = 8;
+    }
+}
+
+//Записываем в файл последовательность битов
+void sequence_of_bits(unsigned int bit, unsigned int* nextbit,
+    unsigned int* blen, unsigned char* write_bit, FILE* output) {
+    output_bit(bit, blen, write_bit, output);
+
+    for (; *nextbit > 0; (*nextbit)--) {
+        output_bit(!bit, blen, write_bit, output);
+    }
+}
+
+// функция кодирования
+void EnCoder(const char* original = "original.txt", const char* cipher = "cipher.txt") {
+    FILE* input;
+    fopen_s(&input, original, "r");
+
+    if (!input) {
+        puts("ERROR: original text does not open\n");
+        exit(1);
+    }
+
+    uint16_t* alfabet = new uint16_t[256];//массив букв из файла
+    for (int i = 0; i < 256; i++) {//заполняем нулями
+        alfabet[i] = 0;
+    }
+
+    unsigned char c = 0;
+    while (!feof(input)) { //заполняем символами из файла
+        c = fgetc(input);
+        if (!feof(input)) {
+            alfabet[c]++;
+        }
+    }
+    fclose(input);
+
+
+}
+
+int main() {
+    EnCoder();
+
+    ifstream file("original.txt", ios::binary | ios::ate);
+    int size = file.tellg();
+    file.close();
+
+    ifstream file1("cipher.txt", ios::binary | ios::ate);
+    int size1 = file1.tellg();
+    file1.close();
+
+    cout << "Compress value is " << size - size1 << " byte";
+}
