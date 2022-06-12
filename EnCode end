@@ -1,0 +1,216 @@
+#include <sys/stat.h>
+#include <iostream>
+#include <fstream>
+#include <unordered_map>
+#include <vector>
+#include <algorithm>
+#include <stdexcept>
+
+using namespace std;
+
+// Количество битов в регистре
+#define countofbits 16
+
+// возвращает индекс символа
+int index(char c, vector<pair<char, unsigned int>> arr) {
+    for (int i = 0; i < arr.size(); i++) {
+        if (c == arr[i].first) {
+            return i + 2;
+        }
+    }
+    return -1;
+}
+
+// Вывод очередного бита сжатой информации
+void output_bit(unsigned int bit, unsigned int* blen, unsigned char* insertbit, FILE* output) {
+    (*insertbit) >>= 1;
+    if (bit) (*insertbit) |= 0x80;
+    (*blen)--;
+    if ((*blen) == 0) {
+        fputc((*insertbit), output);
+        (*blen) = 8;
+    }
+}
+
+//Записываем в файл последовательность битов
+void sequence_of_bits(unsigned int bit, unsigned int* nextbit, unsigned int* blen, unsigned char* wbit, FILE* output) {
+    output_bit(bit, blen, wbit, output);
+    for (; *nextbit > 0; (*nextbit)--) {
+        output_bit(!bit, blen, wbit, output);
+    }
+}
+
+// функция кодирования
+void EnCoder(const char* original = "original.txt", const char* cipher = "cipher.txt") {
+    FILE* input;
+    fopen_s(&input, original, "r");
+
+    if (!input) {
+        puts("ERROR: original text does not open\n");
+        exit(1);
+    }
+
+    uint16_t* alfabet = new uint16_t[256];//массив букв из файла
+    for (int i = 0; i < 256; i++) {//заполняем нулями
+        alfabet[i] = 0;
+    }
+
+    unsigned char c = 0;
+    while (!feof(input)) { //заполняем символами из файла
+        c = fgetc(input);
+        if (!feof(input)) {
+            alfabet[c]++;
+        }
+    }
+    fclose(input);
+
+    vector<pair<char, unsigned int>> arr;//символ и его частота
+    for (int i = 0; i < 256; i++) {
+        if (alfabet[i] != 0) {
+            arr.push_back(make_pair(static_cast<char>(i), alfabet[i]));
+        }
+    }
+
+    sort(arr.begin(), arr.end(),//сортируем наш алфавит
+        [](const pair<char, unsigned int>& l, const pair<char, unsigned int>& r) {
+                if (l.second != r.second) {
+                    return l.second >= r.second;
+                }
+                return l.first < r.first;
+        });
+
+
+    uint16_t* segment = new uint16_t[arr.size() + 2];
+    segment[0] = 0;
+    segment[1] = 1;
+    for (int i = 0; i < arr.size(); i++) {
+        unsigned int b = arr[i].second;
+        for (int j = 0; j < i; j++) {
+            b += arr[j].second;
+        }
+        segment[i + 2] = b;
+    }
+
+    fopen_s(&input, original, "r");
+    if (!input) {
+        puts("ERROR: original text does not open\n");
+        exit(1);
+    }
+
+    FILE* output;
+    fopen_s(&output, cipher, "w");
+    if (!output) {
+        puts("ERROR: cipher text does not open\n");
+        exit(1);
+    }
+
+
+    char countsym = arr.size();//записываем в файл счетчик символов
+    fputc(countsym, output);
+
+    // записываем в файл символы и их частоты
+    int j = 0;
+    for (int i = 0; i < 256; i++) {
+        if (alfabet[i] != 0) {
+            fputc(static_cast<char>(i), output);
+            fwrite(reinterpret_cast<const char*>(&alfabet[i]), sizeof(uint16_t), 1, output);
+        }
+    }
+
+    unsigned int left = 0;
+    unsigned int right = ((static_cast<unsigned int>(1)<< countofbits) - 1);
+    //использую static_cast для явного преобразования типов
+    unsigned int numerator = right - left + 1;
+    unsigned int denominator = segment[arr.size() + 1];
+    //делим отрезок на части
+    unsigned int part_one = (right + 1) / 4;
+    unsigned int half = part_one * 2;//середина
+    unsigned int part_three = part_one * 3;
+
+    unsigned int nextbit = 0;
+    unsigned int blen = 8;
+    unsigned char insertbit = 0;
+
+    while (!feof(input)) {
+        c = fgetc(input);
+        if (!feof(input)) {
+            j = index(c, arr);
+            // меняем  границы отрезка под считанный символ
+            right = left + segment[j] * numerator / denominator - 1;
+            left = left + segment[j - 1] * numerator / denominator;
+            //побитово записываем в файл
+            for (;;) { 
+                if (right < half) {
+                    sequence_of_bits(0, &nextbit, &blen, &insertbit, output);
+                }
+                else if (left >= half) {
+                    sequence_of_bits(1, &nextbit, &blen, &insertbit, output);
+                    left -= half;
+                    right -= half;
+                }
+                else if ((left >= part_one) && (right < part_three)) {
+                    nextbit++;
+                    left -= part_one;
+                    right -= part_one;
+                }
+                else {
+                    break;
+                }
+
+                left += left;
+                right += right + 1;
+            }
+        }
+        else {  //нужен для кодирования кода конца файла
+            right = left + segment[1] * numerator / denominator - 1;
+            left = left + segment[0] * numerator / denominator;
+
+            for (;;) {
+                if (right < half) {
+                    sequence_of_bits(0, &nextbit, &blen, &insertbit, output);
+                }
+                else if (left >= half) {
+                    sequence_of_bits(1, &nextbit, &blen, &insertbit, output);
+                    left -= half;
+                    right -= half;
+                }
+                else if ((left >= part_one) && (right < part_three)) {
+                    nextbit++;
+                    left -= part_one;
+                    right -= part_one;
+                }
+                else break;
+
+                left += left;
+                right += right + 1;
+            }
+
+            nextbit += 1;
+            if (left < part_one) {
+                sequence_of_bits(0, &nextbit, &blen, &insertbit, output);
+            }
+            else {
+                sequence_of_bits(1, &nextbit,&blen, &insertbit, output);
+            }
+            insertbit >>= blen;
+            fputc(insertbit, output);
+        }
+        numerator = right - left + 1;
+    }
+    fclose(input);
+    fclose(output);
+}
+
+int main() {
+    EnCoder();
+
+    ifstream file("original.txt", ios::binary | ios::ate);
+    int size = file.tellg();
+    file.close();
+
+    ifstream file1("cipher.txt", ios::binary | ios::ate);
+    int size1 = file1.tellg();
+    file1.close();
+
+    cout << "Compress value is " << size - size1 << " byte";
+}
