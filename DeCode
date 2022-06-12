@@ -1,0 +1,44 @@
+#include <iostream>
+#include <fstream>
+#include <unordered_map>
+#include <vector>
+#include <algorithm>
+#include <stdexcept>
+
+using namespace std;
+
+// Количество битов в регистре
+#define countofbits 16
+
+//функция побитового считывания из файла
+int bitwise_reading(unsigned char* rbit, unsigned int* blen, FILE* input, unsigned int* remains) {
+    if ((*blen) == 0) {
+        (*rbit) = fgetc(input);
+        if (feof(input)) {
+            (*remains)++;
+        }
+        (*blen) = 8;
+    }
+    int t = (*rbit) & 1;
+    (*rbit) >>= 1;
+    (*blen)--;
+    return t;
+}
+
+//функция декодирования
+void DeCoder(const char* cipher = "cipher.txt", const char* decoder = "decoder.txt") {
+    unsigned int* alfabet = new unsigned int[256];
+    for (int i = 0; i < 256; i++) {
+        alfabet[i] = 0;
+    }
+    FILE* input;
+    fopen_s(&input, cipher, "r");
+    if (!input) {
+        puts("ERROR: cipher text does not open\n");
+        exit(1);
+    }
+}
+
+int main() {
+    DeCoder();
+}
