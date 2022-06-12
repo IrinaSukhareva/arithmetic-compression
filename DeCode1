@@ -1,0 +1,148 @@
+#include <iostream>
+#include <fstream>
+#include <unordered_map>
+#include <vector>
+#include <algorithm>
+#include <stdexcept>
+
+using namespace std;
+
+// Количество битов в регистре
+#define countofbits 16
+
+//функция побитового считывания из файла
+int bitwise_reading(unsigned char* rbit, unsigned int* blen, FILE* input, unsigned int* remains) {
+    if ((*blen) == 0) {
+        (*rbit) = fgetc(input);
+        if (feof(input)) {
+            (*remains)++;
+        }
+        (*blen) = 8;
+    }
+    int t = (*rbit) & 1;
+    (*rbit) >>= 1;
+    (*blen)--;
+    return t;
+}
+
+//функция декодирования
+void DeCoder(const char* cipher = "cipher.txt", const char* decipher = "decipher.txt") {
+    unsigned int* alfabet = new unsigned int[256];
+    for (int i = 0; i < 256; i++) {
+        alfabet[i] = 0;
+    }
+    FILE* input;
+    fopen_s(&input, cipher, "r");
+    if (!input) {
+        puts("ERROR: cipher text does not open\n");
+        exit(1);
+    }
+
+    unsigned char inputcount = 0;
+    unsigned int count = 0;
+    inputcount = fgetc(input);//считываем первый элемент
+    if (!feof(input)) {//это кол-во символов
+        count = static_cast<unsigned int>(inputcount);//преобразовываем
+    }
+
+    unsigned char c = 0;
+
+    // считываем символы и их частоты
+    for (int i = 0; i < count; i++) {
+        c = fgetc(input);
+        if (!feof(input)) {
+            fread(reinterpret_cast<char*>(&alfabet[c]), sizeof(uint16_t), 1, input);
+        }
+    }
+
+    vector<pair<char, unsigned int>> arr;//символ и его частота
+    for (int i = 0; i < 256; i++) {
+        if (alfabet[i] != 0) {
+            arr.push_back(make_pair(static_cast<char>(i), alfabet[i]));
+        }
+    }
+
+    sort(arr.begin(), arr.end(),//сортируем
+        [](const std::pair<char, unsigned int>& l,
+            const std::pair<char, unsigned int>& r) {
+                if (l.second != r.second) {
+                    return l.second >= r.second;
+                }
+                return l.first < r.first;
+        });
+
+
+    uint16_t* segment = new uint16_t[arr.size() + 2];
+    segment[0] = 0;
+    segment[1] = 1;
+    for (int i = 0; i < arr.size(); i++) {
+        unsigned int b = arr[i].second;
+        for (int j = 0; j < i; j++) {
+            b += arr[j].second;
+        }
+        segment[i + 2] = b;
+    }
+
+    FILE* output;
+    fopen_s(&output, decipher, "w");
+    if (!input) {
+        puts("ERROR: original text does not open\n");
+        exit(1);
+    }
+
+    unsigned int left = 0;
+    unsigned int right = ((static_cast<unsigned int>(1) << countofbits) - 1);
+    unsigned int numerator;
+    unsigned int denominator = segment[arr.size() + 1];
+
+    unsigned int part_one = (right + 1) / 4;
+    unsigned int half = part_one * 2;
+    unsigned int part_three = part_one * 3;
+
+
+    unsigned int blen = 0;
+    unsigned char rbit = 0;
+    unsigned int remains = 0;
+    uint16_t value = 0;
+    int k = 0;
+
+    // побитово считываем первый байт и находим значение кода
+    for (int i = 1; i <= 16; i++) {
+        k = bitwise_reading(&rbit, &blen, input, &remains);
+        value = 2 * value + k;
+    }
+    
+
+    fclose(input);
+    fclose(output);
+}
+
+void Equal(const char* original = "original.txt", const char* decipher = "decipher.txt") {
+    FILE* input;
+    fopen_s(&input, original, "r");
+    FILE* output;
+    fopen_s(&output, decipher, "r");
+    if (!input || !output) {
+        puts("ERROR: texts does not open\n");
+        exit(1);
+    }
+    char a = fgetc(input), b = fgetc(output);
+    while ((!feof(input)) && (!feof(output))) {
+        a = fgetc(input);
+        b = fgetc(output);
+        if ((a != b) || (!feof(input)) && (feof(output)) || (feof(input)) && (!feof(output))) {
+            puts("\nTexts are not equal\n");
+            exit(1);
+        }
+    }
+    cout << "\nTexts are equal\n";
+    fclose(input);
+    fclose(output);
+}
+
+
+
+int main() {
+    DeCoder();
+    Equal();
+}
